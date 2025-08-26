@@ -1,7 +1,7 @@
 // This script handles the frontend logic for submitting jobs and polling their status.
 document.addEventListener('DOMContentLoaded', () => {
 
-    // Get references to all the HTML elements we will interact with.
+    
     const form = document.getElementById('task-form');
     const selectTask = document.getElementById('task-name');
     const inputParams = document.getElementById('task-params');
