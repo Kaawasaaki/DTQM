@@ -1,0 +1,59 @@
+
+
+# --- 1. Global Defaults and Configuration ---
+image: python:3.11-slim
+
+
+stages:
+  - lint
+  - test
+
+
+cache:
+  key:
+    files:
+      - api/requirements.txt
+      - worker/requirements.txt
+  paths:
+    - .cache/pip
+
+# --- 2. The Jobs ---
+
+
+lint_code:
+  stage: lint
+  before_script:
+    - pip install ruff
+  script:
+    - echo "Linting code with Ruff..."
+    - ruff check .
+    - echo "Checking formatting with Ruff..."
+    - ruff format --check .
+
+# --- TEST STAGE: Run automated tests in a realistic environment. ---
+run_tests:
+  stage: test
+  services:
+    - postgres:15-alpine
+    - redis:7-alpine
+  
+  variables:
+    POSTGRES_DB: testdb
+    POSTGRES_USER: testuser
+    POSTGRES_PASSWORD: testpassword
+    DB_HOST: postgres 
+    REDIS_HOST: redis   
+
+  before_script:
+    # Install all dependencies needed for testing.
+    - pip install -r api/requirements.txt
+    - pip install -r worker/requirements.txt
+    - pip install pytest
+  
+  script:
+    
+    - echo "Running automated tests..."
+    - pytest
+  
+  needs:
+    - lint_code
