@@ -1,12 +1,11 @@
 
-
 # --- 1. Global Defaults and Configuration ---
 image: python:3.11-slim
-
 
 stages:
   - lint
   - test
+  - build
 
 
 cache:
@@ -15,45 +14,73 @@ cache:
       - api/requirements.txt
       - worker/requirements.txt
   paths:
-    - .cache/pip
+    - .cache/pip 
 
 # --- 2. The Jobs ---
 
-
+# --- LINT STAGE ---
 lint_code:
   stage: lint
   before_script:
+    # Install our linter tool before running it.
     - pip install ruff
   script:
+    
     - echo "Linting code with Ruff..."
     - ruff check .
+    
     - echo "Checking formatting with Ruff..."
     - ruff format --check .
 
-# --- TEST STAGE: Run automated tests in a realistic environment. ---
+# --- TEST STAGE ---
 run_tests:
   stage: test
   services:
     - postgres:15-alpine
     - redis:7-alpine
   
+  
+  
   variables:
     POSTGRES_DB: testdb
     POSTGRES_USER: testuser
     POSTGRES_PASSWORD: testpassword
-    DB_HOST: postgres 
-    REDIS_HOST: redis   
+    DB_HOST: postgres
+    REDIS_HOST: redis
 
   before_script:
-    # Install all dependencies needed for testing.
-    - pip install -r api/requirements.txt
-    - pip install -r worker/requirements.txt
+    - pip install -r api/requirements.txt -r worker/requirements.txt
     - pip install pytest
   
   script:
-    
     - echo "Running automated tests..."
     - pytest
+
+# --- BUILD STAGE ---
+build_images: 
+  stage: build
+  image: docker:20.10.16
+  services:
+    - name: docker:20.10.16-dind
+      alias: docker
+
+  before_script:
+    - echo "Logging into GitLab Container Registry..."
+    - echo $CI_REGISTRY_PASSWORD | docker login $CI_REGISTRY -u $CI_REGISTRY_USER --password-stdin
+
+  script:
+    - echo "Building API image..."
+    - docker build -t $CI_REGISTRY_IMAGE/api:$CI_COMMIT_SHORT_SHA -t $CI_REGISTRY_IMAGE/api:latest ./api
   
-  needs:
-    - lint_code
+    - echo "Building Worker image..."
+    - docker build -t $CI_REGISTRY_IMAGE/worker:$CI_COMMIT_SHORT_SHA -t $CI_REGISTRY_IMAGE/worker:latest ./worker
+
+
+    - echo "Pushing images to registry..."
+    - docker push --all-tags $CI_REGISTRY_IMAGE/api
+    - docker push --all-tags $CI_REGISTRY_IMAGE/worker
+
+ 
+  rules:
+    - if: $CI_COMMIT_BRANCH == "main"
+
